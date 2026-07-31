@@ -1,101 +1,206 @@
-import { useContext, useState, useRef, useEffect, useCallback } from "react";
-import { NavLink, Link } from "react-router-dom";
+import {
+  useContext,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+
+import {
+  Link,
+  NavLink,
+  useNavigate,
+} from "react-router-dom";
+
 import "./Navbar.css";
+
 import logo from "../assets/background.png";
-import { Search, Heart, ShoppingCart, Menu, X } from "lucide-react";
+
+import {
+  Search,
+  Heart,
+  ShoppingCart,
+  Menu,
+  X,
+} from "lucide-react";
+
 import { StoreContext } from "../context/StoreContext";
 
 function Navbar() {
+  const navigate = useNavigate();
+
+  const {
+    products,
+    cartCount,
+    wishlistCount,
+    user,
+    searchQuery,
+    setSearchQuery,
+  } = useContext(StoreContext);
+
+  /* ===========================
+      STATE
+  =========================== */
+
   const [menuOpen, setMenuOpen] = useState(false);
-  const { cartCount, wishlistCount, user } = useContext(StoreContext);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const menuRef = useRef(null);
+  const searchRef = useRef(null);
   const toggleRef = useRef(null);
+
   const previouslyFocused = useRef(null);
 
+  /* ===========================
+      NAVIGATION
+  =========================== */
+
   const navItems = [
-    { label: "HOME", to: "/" },
-    { label: "Products", to: "/products" },
-    { label: "Wishlist", to: "/wishlist" },
-    { label: "Orders", to: "/orders" },
-    ...(user?.isAdmin ? [{ label: "ADMIN", to: "/admin" }] : []),
+    {
+      label: "Home",
+      to: "/",
+    },
+    {
+      label: "Products",
+      to: "/products",
+    },
+    {
+      label: "Wishlist",
+      to: "/wishlist",
+    },
+    {
+      label: "Orders",
+      to: "/orders",
+    },
+
+    ...(user?.isAdmin
+      ? [
+          {
+            label: "Admin",
+            to: "/admin",
+          },
+        ]
+      : []),
   ];
 
-  // Focus management: trap focus inside mobile menu when open and restore focus on close
-  const handleKeyDown = useCallback(
-    (e) => {
-      if (!menuOpen) return;
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setMenuOpen(false);
-        toggleRef.current?.focus();
-        return;
-      }
+  /* ===========================
+      SEARCH
+  =========================== */
 
-      if (e.key === "Tab") {
-        const container = menuRef.current;
-        if (!container) return;
-        const focusable = Array.from(
-          container.querySelectorAll('a, button, input, [tabindex]:not([tabindex="-1"])')
-        ).filter((el) => !el.hasAttribute('disabled'));
-        if (focusable.length === 0) {
-          e.preventDefault();
-          return;
-        }
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey) {
-          if (document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+
+    return products
+      .filter((product) =>
+        product.name
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase())
+      )
+      .slice(0, 6);
+  }, [products, searchQuery]);
+
+  const handleSearchChange = (event) => {
+    setSearchQuery(event.target.value);
+  };
+
+  const handleSearchSelect = (product) => {
+    setSearchQuery("");
+    setSearchOpen(false);
+    navigate(`/product/${product.id}`);
+  };
+
+  /* ===========================
+      MENU
+  =========================== */
+
+  const toggleMenu = () => {
+    setMenuOpen((prev) => !prev);
+  };
+
+  const closeMenu = () => {
+    setMenuOpen(false);
+  };
+
+  /* ===========================
+      ACCESSIBILITY
+  =========================== */
+
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (!menuOpen) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMenu();
+        toggleRef.current?.focus();
       }
     },
     [menuOpen]
   );
 
   useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [handleKeyDown]);
+
+  /* ===========================
+      CLOSE MENU
+  =========================== */
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target) &&
+        toggleRef.current &&
+        !toggleRef.current.contains(event.target)
+      ) {
+        closeMenu();
+      }
+
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target)
+      ) {
+        setSearchOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+  }, []);
+
+  /* ===========================
+      FOCUS
+  =========================== */
+
+  useEffect(() => {
     if (menuOpen) {
-      // save previously focused element
-      previouslyFocused.current = document.activeElement;
-
-      // set aria-hidden on sibling content so screen readers don't jump out
-      const appChildren = document.querySelectorAll('.app-shell > *');
-      appChildren.forEach((el) => {
-        if (!el.classList.contains('navbar')) {
-          el.setAttribute('aria-hidden', 'true');
-        }
-      });
-
-      // focus first focusable item inside menu
-      const container = menuRef.current;
-      const focusable = container
-        ? Array.from(container.querySelectorAll('a, button, input, [tabindex]:not([tabindex="-1"])')).filter((el) => !el.hasAttribute('disabled'))
-        : [];
-      if (focusable.length > 0) focusable[0].focus();
-
-      document.addEventListener('keydown', handleKeyDown);
-
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown);
-      };
+      previouslyFocused.current =
+        document.activeElement;
+    } else {
+      previouslyFocused.current?.focus();
     }
+  }, [menuOpen]);
 
-    // cleanup: remove aria-hidden and restore focus
-    const appChildren = document.querySelectorAll('.app-shell > *');
-    appChildren.forEach((el) => el.removeAttribute('aria-hidden'));
-    if (previouslyFocused.current) {
-      previouslyFocused.current.focus();
-      previouslyFocused.current = null;
-    }
-    return undefined;
-  }, [menuOpen, handleKeyDown]);
+  /* ===========================
+      JSX STARTS IN PART 1B
+  =========================== */
 
   return (
     <header className="navbar">
@@ -105,15 +210,20 @@ function Navbar() {
         </Link>
       </div>
 
-      <nav ref={menuRef} className={`nav-links ${menuOpen ? "open" : ""}`} aria-label="Primary">
+      <nav ref={menuRef} 
+      className={`nav-links ${menuOpen ? "open" : ""}`} 
+      aria-label="Primary"
+      >
         <ul className="nav-list">
           {navItems.map((item, idx) => (
             <li key={item.to} style={{ ['--i']: idx }}>
               <NavLink
                 to={item.to}
+                className={({ isActive }) =>(isActive ?"active":"")}
                 onClick={() => setMenuOpen(false)}
               >
                 {item.label}
+                
               </NavLink>
             </li>
           ))}
@@ -121,46 +231,67 @@ function Navbar() {
       </nav>
 
       <div className="right-menu">
-        <button type="button" className="icon-btn" aria-label="Search">
-          <Search size={10} />
-        </button>
+  {/* Search */}
+  <button
+    type="button"
+    className="icon-btn desktop-only"
+    aria-label="Search"
+  >
+    <Search size={22} />
+  </button>
 
-        <Link to="/wishlist" className="icon-btn" aria-label="Wishlist">
-          <Heart size={10} />
-          {wishlistCount > 0 ? <span className="badge">{wishlistCount}</span> : null}
-        </Link>
+  {/* Wishlist */}
+  <Link to="/wishlist" className="icon-btn" aria-label="Wishlist">
+    <Heart size={22} />
+    {wishlistCount > 0 && (
+      <span className="badge">{wishlistCount}</span>
+    )}
+  </Link>
 
-        {user ? (
-          <Link to="/account" className="signin-btn">
-            {user.name}
-          </Link>
-        ) : (
-          <>
-            <Link to="/signin" className="signin-btn">
-              Sign In
-            </Link>
-            <Link to="/signup" className="signup-btn">
-              Sign Up
-            </Link>
-          </>
-        )}
+  {/* Cart */}
+  <Link to="/cart" className="cart-btn" aria-label="Cart">
+    <ShoppingCart size={22} />
+    {cartCount > 0 && (
+      <span className="cart-count">{cartCount}</span>
+    )}
+  </Link>
 
-        <Link to="/cart" className="cart-btn glow-cart" aria-label="Cart">
-          <ShoppingCart size={15} />
-          <span className="cart-count">{cartCount}</span>
-        </Link>
+  {/* Desktop Sign In / Sign Up */}
+  {!user ? (
+    <>
+      <Link to="/signin" className="signin-btn desktop-only">
+        Sign In
+      </Link>
 
-        <button
-          type="button"
-          ref={toggleRef}
-          className="menu-toggle"
-          aria-label="Toggle menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((s) => !s)}
-        >
-          {menuOpen ? <X size={15} /> : <Menu size={15} />}
-        </button>
-      </div>
+      <Link to="/signup" className="signup-btn desktop-only">
+        Sign Up
+      </Link>
+    </>
+  ) : (
+    <Link to="/account" className="signin-btn">
+      {user.name}
+    </Link>
+  )}
+
+  {/* Hamburger Menu */}
+  <button
+    type="button"
+    ref={toggleRef}
+    className="menu-toggle"
+    aria-label={menuOpen ? "Close menu" : "Open menu"}
+    aria-expanded={menuOpen}
+    aria-controls="primary-navigation"
+    onClick={() => setMenuOpen((prev) => !prev)}
+  >
+    {menuOpen ? <X size={28} /> : <Menu size={28} />}
+  </button>
+</div>
+      {menuOpen && (
+  <div
+    className="menu-overlay"
+    onClick={() => setMenuOpen(false)}
+  />
+)}
     </header>
   );
 }
