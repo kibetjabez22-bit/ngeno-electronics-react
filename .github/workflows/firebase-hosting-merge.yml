@@ -35,4 +35,3 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NGENOS_ELECTRONICS }}
           channelId: live
           projectId: ngenos-electronics
-          entryPoint: .
